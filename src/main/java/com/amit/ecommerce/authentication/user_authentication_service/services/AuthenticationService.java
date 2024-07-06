@@ -1,10 +1,14 @@
 package com.amit.ecommerce.authentication.user_authentication_service.services;
 
+import com.amit.ecommerce.authentication.user_authentication_service.clients.KafkaProducerClient;
+import com.amit.ecommerce.authentication.user_authentication_service.dtos.EmailDto;
 import com.amit.ecommerce.authentication.user_authentication_service.models.Session;
 import com.amit.ecommerce.authentication.user_authentication_service.models.SessionState;
 import com.amit.ecommerce.authentication.user_authentication_service.models.User;
 import com.amit.ecommerce.authentication.user_authentication_service.repositories.SessionRepository;
 import com.amit.ecommerce.authentication.user_authentication_service.repositories.UserRepository;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.JwtParser;
 import io.jsonwebtoken.Jwts;
@@ -29,8 +33,15 @@ public class AuthenticationService {
 
     @Autowired
     private BCryptPasswordEncoder bCryptPasswordEncoder;
+
     @Autowired
     private SessionRepository sessionRepository;
+
+    @Autowired
+    KafkaProducerClient kafkaProducerClient;
+
+    @Autowired
+    ObjectMapper objectMapper;
 
     @Autowired
     private SecretKey secretKey;
@@ -45,7 +56,23 @@ public class AuthenticationService {
         user.setEmail(email);
         user.setPassword(bCryptPasswordEncoder.encode(password));
         userRepository.save(user);
-        return user;
+
+        // Sending message in Kafka
+        /*If we want to change the structure of email then we can change in emailDto only.*/
+        EmailDto emailDto = new EmailDto();
+        emailDto.setTo(email);
+        emailDto.setFrom("heyaku101@gmail.com");
+        emailDto.setSubject("Welcome to Ecommerce");
+        emailDto.setBody("Have a great shopping");
+
+        try{
+            kafkaProducerClient.sendMessage("sendEmail", objectMapper.writeValueAsString(emailDto));
+            return user;
+        } catch (JsonProcessingException ex){
+            throw new RuntimeException(ex);
+        }
+
+        //return user;
     }
 
     public Pair<User, MultiValueMap<String,String>> login(String email, String password) {
